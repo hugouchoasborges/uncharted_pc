@@ -7,6 +7,7 @@ from paths import ROOT
 
 sys.path.insert(0, str(ROOT / 'launcher'))
 import uncharted_i18n
+import uncharted_launcher
 
 
 class LauncherTranslationTests(unittest.TestCase):
@@ -50,6 +51,30 @@ class LauncherTranslationTests(unittest.TestCase):
         for language in ('es', 'pt', 'fr', 'de', 'it', 'ja'):
             with self.subTest(language=language):
                 self.assertEqual(texts - set(uncharted_i18n.TRANSLATIONS[language]), set())
+
+    def test_display_choice_options_are_translated(self):
+        option_sets = (
+            uncharted_launcher.PRESENT_MODES,
+            uncharted_launcher.FRAME_RATES,
+            uncharted_launcher.WINDOW_SIZES,
+            uncharted_launcher.SCALERS,
+            uncharted_launcher.SHARPENING,
+            uncharted_launcher.ANTI_ALIASING,
+            (uncharted_launcher.FSR411,),
+            uncharted_launcher.AA_SHARPNESS,
+            uncharted_launcher.FRAME_GENERATION,
+            uncharted_launcher.FRAME_GEN_MULTIPLIERS,
+        )
+        labels = {label for options in option_sets for _value, label in options}
+        technical_labels = {
+            'FIFO (VSync)', 'FIFO Relaxed', '120 FPS', '240 FPS',
+            '1280 × 720', '1600 × 900', '2560 × 1440', '3840 × 2160 (4K)',
+            'TAA', 'NVIDIA DLSS (DLAA, GeForce RTX)',
+        }
+        for language in ('es', 'pt', 'fr', 'de', 'it', 'ja'):
+            for label in labels - technical_labels:
+                with self.subTest(language=language, label=label):
+                    self.assertNotEqual(uncharted_i18n.translate(language, label), label)
 
 
 if __name__ == '__main__':

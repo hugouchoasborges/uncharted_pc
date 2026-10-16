@@ -362,6 +362,7 @@ class Launcher:
         self.card_hot = None
         self.info = None
         self.update_box = None
+        self.update_info = None
         root.title(f'{NAME} — The Nathan Drake Collection for Windows · by {AUTHOR}')
         root.configure(bg=BG)
         self.dpi = root.winfo_fpixels('1i') / 96.0
@@ -1381,17 +1382,21 @@ class Launcher:
         """Save and rebuild every label as soon as the interface language changes."""
         global UI_LANGUAGE
         page = self.current_page or 'advanced'
+        update_info = self.update_info
         self.collect()
         UI_LANGUAGE = uncharted_i18n.language_code(self.app['ui_language'])
         for child in self.root.winfo_children():
             child.destroy()
         self.vars = {}
+        self.update_box = self.update_label = self.update_button = None
         self.build()
         self.show(page)
         self.refresh()
         if self.process:
             self.play_button.configure(state='disabled')
             self.stop_button.configure(state='normal')
+        if update_info:
+            self.offer_update(*update_info)
 
     def configure_art(self):
         import uncharted_art
@@ -1577,6 +1582,7 @@ class Launcher:
         self.ui_calls.put(show)
 
     def offer_update(self, version, url, page):
+        self.update_info = (version, url, page)
         if self.update_box:
             return
         tk = self.tk
@@ -1734,6 +1740,7 @@ class Launcher:
             pythonw = Path(sys.executable).with_name('pythonw.exe')
             target = str(pythonw if pythonw.exists() else sys.executable)
             arguments, icon = Path(__file__).resolve(), PORT_DIR / 'launcher' / 'uncharted.ico'
+        default_icon = icon
         custom_icon = self.app.get('shortcut_icon', '')
         if custom_icon:
             try:
@@ -1742,9 +1749,10 @@ class Launcher:
                 icon = CONFIG_DIR / 'custom-shortcut.ico'
                 with Image.open(custom_icon) as image:
                     image.convert('RGBA').save(icon, sizes=[(16, 16), (32, 32), (48, 48), (256, 256)])
-            except OSError as error:
-                self.messagebox.showerror(NAME, _('This image could not be opened: {}').format(error))
-                return
+            except OSError:
+                self.app['shortcut_icon'] = ''
+                icon = default_icon
+                self.collect()
         name = re.sub(r'[<>:"/\\|?*]', '', self.app.get('shortcut_name', '')).strip() or 'Uncharted'
         ps = lambda value: "'" + str(value).replace("'", "''") + "'"
         script = ('$desktop=[Environment]::GetFolderPath("Desktop");'

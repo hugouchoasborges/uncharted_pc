@@ -36,6 +36,7 @@ out/pyenv/Scripts/python.exe -m PyInstaller --noconfirm --clean --log-level WARN
     --add-data "$(cygpath -w "$PWD/launcher/fonts");fonts" \
     --add-data "$(cygpath -w "$PWD/launcher/covers");covers" \
     "${hidden[@]}" \
+    --collect-all tkinterdnd2 \
     "$(cygpath -w "$PWD/launcher/uncharted_launcher.py")"
 
 # The package is assembled in a fresh staging folder and zipped from there; dist/uncharted-windows
