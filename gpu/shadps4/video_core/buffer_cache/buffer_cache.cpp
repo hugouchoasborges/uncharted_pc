@@ -250,7 +250,12 @@ bool BufferCache::DownloadOnSideQueue(VAddr page, u64 length) {
             .commandBufferCount = 1,
             .pCommandBuffers = &side.cmdbuf,
         };
-        Vulkan::Check(side.queue.submit(submit, *side.fence));
+        {
+            // The sparse-binding queue can share this queue's handle. Vulkan requires
+            // host submissions to the same queue to be externally synchronized.
+            std::scoped_lock submit_lock{Vulkan::Scheduler::submit_mutex};
+            Vulkan::Check(side.queue.submit(submit, *side.fence));
+        }
         Vulkan::Check(side.device.waitForFences(*side.fence, true, UINT64_MAX));
         Vulkan::Check(side.device.resetFences(*side.fence));
         side.staging.Invalidate(0, total);
