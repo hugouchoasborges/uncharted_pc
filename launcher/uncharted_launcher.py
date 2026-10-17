@@ -40,7 +40,7 @@ CONFIG_FILE = CONFIG_DIR / 'settings.json'
 NAME = 'Uncharted'
 AUTHOR = 'SuperMedo'
 # This build; GitHub release tags are v<VERSION> (their digits are compared).
-VERSION = '0.3.6'
+VERSION = '0.3.7'
 RELEASES_API = 'https://api.github.com/repos/Supermedo/uncharted_pc/releases/latest'
 RELEASES_PAGE = 'https://github.com/Supermedo/uncharted_pc/releases/latest'
 UPDATE_DIR = Path(tempfile.gettempdir()) / 'uncharted-update'
@@ -1369,7 +1369,7 @@ class Launcher:
                        'a folder here is taken from it; the others from the collection folder above.'), top=2)
         for key, _title, subtitle, _exe in GAMES:
             self.folder(f, f'game_dir_{key}', _(subtitle.split(' · ')[0]), _('The folder of this game'),
-                        _('Empty: the collection folder.'), on_change=self.refresh)
+                        _('Empty: the collection folder.'), on_change=self.refresh, group=self.folder_rows)
         self.section(f, _('Console'))
         self.row(f, _('Language'), self.choice(f, 'language', LANGUAGES, 30),
                  _('The language the PS4 would be set to; the games use it for text and speech.'))
