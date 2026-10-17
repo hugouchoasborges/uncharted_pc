@@ -39,10 +39,10 @@ CONFIG_DIR = Path(os.environ.get('APPDATA', Path.home())) / 'uncharted-launcher'
 CONFIG_FILE = CONFIG_DIR / 'settings.json'
 NAME = 'Uncharted'
 AUTHOR = 'SuperMedo'
-# This build; GitHub release tags are v<VERSION> (their digits are compared).
-VERSION = '0.3.8'
-RELEASES_API = 'https://api.github.com/repos/Supermedo/uncharted_pc/releases/latest'
-RELEASES_PAGE = 'https://github.com/Supermedo/uncharted_pc/releases/latest'
+# Upstream release plus this fork's revision; GitHub tags are v<VERSION>.
+VERSION = '0.3.3.8'
+RELEASES_API = 'https://api.github.com/repos/soni424/uncharted_pc/releases/latest'
+RELEASES_PAGE = 'https://github.com/soni424/uncharted_pc/releases/latest'
 UPDATE_DIR = Path(tempfile.gettempdir()) / 'uncharted-update'
 # Never copied over an installation by an update (the package does not hold them either).
 USER_FILES = ('user', 'out', 'art', 'bbport.ini', 'input.ini', 'last_run.log')
@@ -425,6 +425,49 @@ COLORS = {'surface': SURFACE, 'card': CARD, 'card_hi': CARD_HI, 'line': LINE, 't
 NAV_ICONS = {'play': '\ue768', 'game': '\ue7fc', 'display': '\ue7f4', 'controls': '\ue765',
              'cheats': '\ue734', 'saves': '\ue74e', 'advanced': '\ue713', 'log': '\ue8a5'}
 RUST, RUST_HI = GOLD, GOLD_HI
+DWM_USE_IMMERSIVE_DARK_MODE = 20
+DWM_USE_IMMERSIVE_DARK_MODE_LEGACY = 19
+DWM_CAPTION_COLOR, DWM_TEXT_COLOR = 35, 36
+GA_ROOT = 2
+
+
+def set_dark_title_bar(window):
+    """Match the native Windows caption to the launcher's dark palette."""
+    if sys.platform != 'win32':
+        return False
+    try:
+        hwnd = window.winfo_id()
+        if not hwnd:
+            return False
+        get_root = ctypes.windll.user32.GetAncestor
+        get_root.argtypes = (ctypes.c_void_p, ctypes.c_uint32)
+        get_root.restype = ctypes.c_void_p
+        root_hwnd = get_root(ctypes.c_void_p(hwnd), GA_ROOT)  # Tk client HWND -> caption HWND.
+        if root_hwnd:
+            hwnd = root_hwnd
+        set_attribute = ctypes.windll.dwmapi.DwmSetWindowAttribute
+        set_attribute.argtypes = (ctypes.c_void_p, ctypes.c_uint32, ctypes.c_void_p, ctypes.c_uint32)
+        set_attribute.restype = ctypes.c_long
+    except (AttributeError, OSError, TypeError, ValueError):
+        return False
+
+    def apply(attribute, value):
+        native_value = ctypes.c_uint32(value)
+        try:
+            return set_attribute(ctypes.c_void_p(hwnd), ctypes.c_uint32(attribute),
+                                 ctypes.byref(native_value), ctypes.sizeof(native_value)) == 0
+        except (AttributeError, OSError, TypeError, ValueError):
+            return False
+
+    # Honor the system dark theme on versions that support only the immersive flag.
+    dark_mode = apply(DWM_USE_IMMERSIVE_DARK_MODE, 1)
+    if not dark_mode:
+        dark_mode = apply(DWM_USE_IMMERSIVE_DARK_MODE_LEGACY, 1)  # Legacy Windows 10 attribute.
+
+    # Explicit colors keep this dark-themed launcher consistent when Windows is in Light mode.
+    caption = apply(DWM_CAPTION_COLOR, 0x000A0908)  # #08090a.
+    text = apply(DWM_TEXT_COLOR, 0x00E6EFF3)  # #f3efe6.
+    return dark_mode or (caption and text)
 
 
 # The launcher UI follows Windows' scale. The process stays system-DPI aware (main), so Windows does
@@ -524,6 +567,7 @@ class Launcher:
             self.ui_scale = ui_scale_for(monitor_scale, fit_scale(self.area, self.frame))
         root.tk.call('tk', 'scaling', self.ui_scale * 96 / 72)  # fonts are sized in points: follow px()
         self.size_window()
+        self._titlebar_map_binding = root.bind('<Map>', self._on_window_map, add='+')
         self.set_icon()
         self.load_fonts()
         self.style()
@@ -558,6 +602,14 @@ class Launcher:
     def note_window_state(self, event):
         if event.widget is self.root:
             self.app['window_maximized'] = maximized_after(self.app['window_maximized'], self.root.state())
+
+    def _on_window_map(self, event):
+        if event.widget is not self.root:
+            return
+        if self._titlebar_map_binding:
+            self.root.unbind('<Map>', self._titlebar_map_binding)
+            self._titlebar_map_binding = None
+        set_dark_title_bar(self.root)
 
     def set_icon(self):
         try:
