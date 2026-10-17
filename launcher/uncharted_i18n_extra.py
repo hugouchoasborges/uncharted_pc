@@ -597,3 +597,52 @@ _DISPLAY_OPTION_TRANSLATIONS = {
 
 for _code, _translations in _DISPLAY_OPTION_TRANSLATIONS.items():
     EXTRA_TRANSLATIONS.setdefault(_code, {}).update(_translations)
+
+
+_FPS_LIMIT_TRANSLATIONS = {
+    'es': {
+        'Engine frame rate': 'Frecuencia de cuadros del motor',
+        'Frame rate limit': 'Límite de cuadros por segundo',
+        'Default': 'Predeterminado',
+        "The engine frame rate is the highest it can go. Default keeps the port's normal behavior.":
+        'La frecuencia del motor es el máximo que puede alcanzar. Predeterminado conserva el comportamiento normal del port.',
+    },
+    'pt': {
+        'Engine frame rate': 'Taxa de quadros do motor',
+        'Frame rate limit': 'Limite de quadros por segundo',
+        'Default': 'Padrão',
+        "The engine frame rate is the highest it can go. Default keeps the port's normal behavior.":
+        'A taxa de quadros do motor é o máximo que pode atingir. Padrão mantém o comportamento normal do port.',
+    },
+    'fr': {
+        'Engine frame rate': 'Fréquence du moteur',
+        'Frame rate limit': 'Limite de fréquence d’images',
+        'Default': 'Par défaut',
+        "The engine frame rate is the highest it can go. Default keeps the port's normal behavior.":
+        'La fréquence du moteur est le maximum possible. Par défaut conserve le comportement habituel du portage.',
+    },
+    'de': {
+        'Engine frame rate': 'Bildrate der Engine',
+        'Frame rate limit': 'Bildratenbegrenzung',
+        'Default': 'Standard',
+        "The engine frame rate is the highest it can go. Default keeps the port's normal behavior.":
+        'Die Bildrate der Engine ist die höchstmögliche Bildrate. Standard behält das normale Verhalten der Portierung bei.',
+    },
+    'it': {
+        'Engine frame rate': 'Frequenza dei fotogrammi del motore',
+        'Frame rate limit': 'Limite dei fotogrammi',
+        'Default': 'Predefinito',
+        "The engine frame rate is the highest it can go. Default keeps the port's normal behavior.":
+        'La frequenza del motore è il massimo raggiungibile. Predefinito mantiene il comportamento normale del port.',
+    },
+    'ja': {
+        'Engine frame rate': 'エンジンのフレームレート',
+        'Frame rate limit': 'フレームレート上限',
+        'Default': '既定',
+        "The engine frame rate is the highest it can go. Default keeps the port's normal behavior.":
+        'エンジンのフレームレートが到達可能な上限です。既定では移植版の通常の動作を維持します。',
+    },
+}
+
+for _code, _translations in _FPS_LIMIT_TRANSLATIONS.items():
+    EXTRA_TRANSLATIONS.setdefault(_code, {}).update(_translations)
