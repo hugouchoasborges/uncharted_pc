@@ -39,7 +39,7 @@ CONFIG_FILE = CONFIG_DIR / 'settings.json'
 NAME = 'Uncharted'
 AUTHOR = 'SuperMedo'
 # This build; GitHub release tags are v<VERSION> (their digits are compared).
-VERSION = '0.3.4'
+VERSION = '0.3.5'
 RELEASES_API = 'https://api.github.com/repos/Supermedo/uncharted_pc/releases/latest'
 RELEASES_PAGE = 'https://github.com/Supermedo/uncharted_pc/releases/latest'
 UPDATE_DIR = Path(tempfile.gettempdir()) / 'uncharted-update'
@@ -387,8 +387,8 @@ COLORS = {'surface': SURFACE, 'card': CARD, 'card_hi': CARD_HI, 'line': LINE, 't
           'gold': GOLD, 'gold_hi': GOLD_HI, 'track': '#2c2e33', 'knob': '#9a958b', 'knob_on': '#f7f1e2',
           'button': '#25272b', 'button_hi': '#30333a'}
 # Sidebar icons (Segoe Fluent Icons on Windows 11, Segoe MDL2 Assets on Windows 10).
-NAV_ICONS = {'play': '\ue768', 'game': '\ue7fc', 'display': '\ue7f4', 'controls': '\ue765',
-             'cheats': '\ue734', 'advanced': '\ue713', 'log': '\ue8a5'}
+NAV_ICONS = {'saves': '\ue74e', 'play': '\ue768', 'game': '\ue7fc', 'display': '\ue7f4', 'controls': '\ue765',
+             'cheats': '\ue734', 'saves': '\ue74e', 'advanced': '\ue713', 'log': '\ue8a5'}
 RUST, RUST_HI = GOLD, GOLD_HI
 
 
@@ -946,7 +946,7 @@ class Launcher:
         tk.Frame(side, bg=LINE, height=1).pack(fill='x', padx=18, pady=(16, 14))
         self.nav, self.nav_pills, self.nav_icons, self.nav_marks, self.current_page = {}, {}, {}, {}, None
         for name, title in (('play', _('Play')), ('game', _('Game')), ('cheats', _('Cheats')),
-                            ('display', _('Display')), ('controls', _('Controls')), ('advanced', _('Advanced')),
+                            ('display', _('Display')), ('controls', _('Controls')), ('saves', _('Saves')), ('advanced', _('Advanced')),
                             ('log', _('Log'))):
             row = tk.Frame(side, bg=BG, cursor='hand2')
             row.pack(fill='x', padx=(0, 12), pady=2)
@@ -1006,6 +1006,7 @@ class Launcher:
         self.build_display()
         self.build_controls()
         self.build_cheats()
+        self.build_saves()
         self.build_advanced()
         self.build_log()
         self.refresh()
@@ -1417,6 +1418,173 @@ class Launcher:
         holder = self.tk.Frame(card, bg=CARD)
         holder.grid(row=self.next_row(card), column=0, columnspan=2, sticky='w', pady=(12, 0))
         self.pill(holder, _('Default controller buttons'), self.reset_pad).pack(side='left')
+
+    def build_saves(self):
+        f = self.page('saves', _('Saves'),
+                      _('Export your progress to a ZIP file and restore it later.'))
+        self.section(f, _('Portable backup'))
+        self.ttk.Label(
+            f, text=_('The backup includes save data and trophies for the selected user. Shader caches '
+                      'are excluded. Close the game before exporting or restoring.'),
+            style='Muted.TLabel', wraplength=self.px(650), justify='left').grid(
+                row=self.next_row(f), column=0, columnspan=2, sticky='w', pady=(4, 12))
+        buttons = self.tk.Frame(self.target(f), bg=SURFACE)
+        buttons.grid(row=self.next_row(f), column=0, columnspan=2, sticky='w', pady=(4, 10))
+        self.pill(buttons, _('Export backup (.zip)'), self.export_saves, kind='primary',
+                  padding=(18, 9)).pack(side='left')
+        self.pill(buttons, _('Restore backup (.zip)'), self.import_saves,
+                  padding=(18, 9)).pack(side='left', padx=(8, 0))
+        self.pill(buttons, _('Open data folder'),
+                  lambda: self.open_path(self.app.get('user_dir') or DATA_DIR / 'user'),
+                  kind='ghost', padding=(16, 9)).pack(side='left', padx=(8, 0))
+        self.ttk.Label(f, text=_('Restoring creates a backup of your current data before replacing the '
+                                 'items in the ZIP.'), style='Muted.TLabel', wraplength=self.px(650),
+                       justify='left').grid(row=self.next_row(f), column=0, columnspan=2, sticky='w', pady=(0, 8))
+
+
+    def _save_data_roots(self):
+        user = Path(self.current().get('user_dir') or DATA_DIR / 'user').expanduser().resolve()
+        return user, ('savedata', 'trophy')
+
+
+    def _write_save_archive(self, archive_path):
+        user, names = self._save_data_roots()
+        target = Path(archive_path).expanduser().resolve()
+        for name in names:
+            root = user / name
+            if target.is_relative_to(root) or not root.resolve().is_relative_to(user):
+                raise ValueError(_('The ZIP contains an invalid path.'))
+        present = [name for name in names if (user / name).is_dir()]
+        if not present:
+            raise OSError(_('No save data was found yet. Start a game and save once first.'))
+        manifest = {'format': 'uncharted-save-backup-v1', 'created': time.strftime('%Y-%m-%dT%H:%M:%S'),
+                    'folders': present}
+        with zipfile.ZipFile(archive_path, 'w', zipfile.ZIP_DEFLATED, compresslevel=6) as archive:
+            archive.writestr('backup_info.json', json.dumps(manifest, indent=2).encode('utf-8'))
+            for name in present:
+                root = user / name
+                archive.writestr(name.rstrip('/') + '/', b'')
+                for path in root.rglob('*'):
+                    if not path.resolve().is_relative_to(user):
+                        raise ValueError(_('The ZIP contains an invalid path.'))
+                    if path.is_file():
+                        archive.write(path, (Path(name) / path.relative_to(root)).as_posix())
+        return manifest
+
+
+    def export_saves(self):
+        if self.process:
+            self.messagebox.showinfo(NAME, _('Close the game before exporting saves.'))
+            return
+        default = 'Uncharted-saves-' + time.strftime('%Y%m%d-%H%M%S') + '.zip'
+        target = self.filedialog.asksaveasfilename(
+            title=_('Export saves'), initialdir=str(Path(self.app.get('user_dir') or DATA_DIR / 'user')),
+            initialfile=default, defaultextension='.zip', filetypes=[(_('ZIP backup'), '*.zip')])
+        if not target:
+            return
+        try:
+            manifest = self._write_save_archive(target)
+        except (OSError, ValueError, zipfile.BadZipFile) as error:
+            self.messagebox.showerror(NAME, _('Could not create the backup: {}').format(error))
+            return
+        self.messagebox.showinfo(NAME, _('Backup created: {}\nFolders included: {}').format(
+            target, ', '.join(manifest['folders'])))
+
+
+    def import_saves(self):
+        if self.process:
+            self.messagebox.showinfo(NAME, _('Close the game before restoring saves.'))
+            return
+        source = self.filedialog.askopenfilename(
+            title=_('Restore saves'), filetypes=[(_('Uncharted backup'), '*.zip')])
+        if not source:
+            return
+        try:
+            with zipfile.ZipFile(source) as archive:
+                manifest = json.loads(archive.read('backup_info.json').decode('utf-8'))
+                if not isinstance(manifest, dict) or manifest.get('format') != 'uncharted-save-backup-v1':
+                    raise ValueError(_('This ZIP is not an Uncharted launcher save backup.'))
+                roots = manifest.get('folders')
+                if (not isinstance(roots, list) or not roots or any(n not in ('savedata', 'trophy') for n in roots)
+                        or len(set(roots)) != len(roots)):
+                    raise ValueError(_('The backup contains no recognized save folders.'))
+                entries = [item for item in archive.infolist() if item.filename != 'backup_info.json']
+                paths = set()
+                for item in entries:
+                    normalized = item.filename.replace('\\', '/')
+                    key = normalized.rstrip('/').casefold()
+                    if key in paths:
+                        raise ValueError(_('The ZIP contains an invalid path.'))
+                    paths.add(key)
+                    parts = normalized.split('/')
+                    if item.filename.startswith('/') or ':' in item.filename or '..' in parts or not parts[0] in roots:
+                        raise ValueError(_('The ZIP contains an invalid path.'))
+                if not any(not item.is_dir() for item in entries):
+                    raise ValueError(_('The backup contains no save files.'))
+                user, _names = self._save_data_roots()
+                if not self.messagebox.askyesno(NAME, _(
+                        'Restore this backup? Your current data will be backed up first.')):
+                    return
+                for name in roots + ['backups']:
+                    if not (user / name).resolve().is_relative_to(user):
+                        raise ValueError(_('The ZIP contains an invalid path.'))
+                user.mkdir(parents=True, exist_ok=True)
+                stamp = time.strftime('%Y%m%d-%H%M%S') + f'-{time.time_ns() % 1_000_000_000:09d}'
+                backups = user / 'backups'
+                backups.mkdir(parents=True, exist_ok=True)
+                current = [n for n in ('savedata', 'trophy') if (user / n).is_dir()]
+                if current:
+                    self._write_save_archive(backups / f'Uncharted-saves-before-restore-{stamp}.zip')
+                with tempfile.TemporaryDirectory(prefix='.uncharted-save-restore-', dir=str(user)) as temp:
+                    stage = Path(temp)
+                    for item in entries:
+                        parts = item.filename.replace('\\', '/').split('/')
+                        if item.is_dir():
+                            (stage.joinpath(*parts)).mkdir(parents=True, exist_ok=True)
+                        else:
+                            output = stage.joinpath(*parts)
+                            output.parent.mkdir(parents=True, exist_ok=True)
+                            with archive.open(item) as src, output.open('wb') as dst:
+                                shutil.copyfileobj(src, dst)
+                    if any(not (stage / name).is_dir() for name in roots):
+                        raise ValueError(_('The backup contains no recognized save folders.'))
+                    self._replace_save_folders(stage, user, roots)
+            self.messagebox.showinfo(NAME, _('Saves restored.'))
+        except (OSError, ValueError, KeyError, json.JSONDecodeError, zipfile.BadZipFile) as error:
+            self.messagebox.showerror(NAME, _('Could not restore the backup: {}').format(error))
+
+
+    def _replace_save_folders(self, stage, user, roots):
+        # Keep originals on the same volume until every replacement succeeds.
+        recovery = Path(tempfile.mkdtemp(prefix='restore-recovery-', dir=user / 'backups'))
+        moved, installed, clean = [], [], False
+        try:
+            for name in roots:
+                destination = user / name
+                if not destination.resolve().is_relative_to(user):
+                    raise ValueError(_('The ZIP contains an invalid path.'))
+                if destination.exists():
+                    os.replace(destination, recovery / name)
+                    moved.append(name)
+                os.replace(stage / name, destination)
+                installed.append(name)
+            clean = True
+        except (OSError, ValueError) as error:
+            try:
+                for name in reversed(installed):
+                    destination = user / name
+                    if not destination.resolve().is_relative_to(user):
+                        raise OSError(str(destination))
+                    shutil.rmtree(destination)
+                for name in reversed(moved):
+                    os.replace(recovery / name, user / name)
+                clean = True
+            except OSError as rollback_error:
+                raise OSError(f'{rollback_error}; original data retained in {recovery}') from error
+            raise
+        finally:
+            if clean:
+                shutil.rmtree(recovery)
 
     def key_list(self, action):
         value = (self.app.get('key_bindings') or {}).get(action, DEFAULT_KEYS[action])
