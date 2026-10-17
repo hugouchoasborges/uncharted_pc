@@ -85,11 +85,10 @@ def prepare(game, exe, out):
     # Which executable the files in out/ were made from: another folder (a per-game one) needs a new run.
     stamp, source = out / 'source.txt', str(game / exe)
     sources = [game / exe, *(PORT / 'scripts').glob('*.py'), *(game / 'sce_module').glob('*.prx')]
-    if linked.is_file() and all(linked.stat().st_mtime >= s.stat().st_mtime for s in sources):
-        if not stamp.is_file():
-            stamp.write_text(source, encoding='utf-8')
-        if stamp.read_text(encoding='utf-8', errors='replace') == source:
-            return
+    if (linked.is_file() and stamp.is_file()
+            and stamp.read_text(encoding='utf-8', errors='replace') == source
+            and all(linked.stat().st_mtime >= s.stat().st_mtime for s in sources)):
+        return
     print(f'Preparing {exe} ...')
     run_script('prepare.py', game, '--out', out, '--exe', exe)
     run_script('link_modules.py', game, '--out', out, '--exe', exe)
