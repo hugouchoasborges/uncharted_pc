@@ -38,6 +38,8 @@ namespace VideoCore {
 
 static constexpr size_t GDS_BUFFER_SIZE = 64_KB;
 static constexpr size_t STREAM_BUFFER_SIZE = 128_MB;
+// A sparse queue can be the readback queue too; serialize only their host submissions.
+static std::mutex sparse_side_submit_mutex;
 
 static constexpr auto ARENA_USAGE =
     vk::BufferUsageFlagBits::eTransferSrc | vk::BufferUsageFlagBits::eTransferDst |
@@ -250,7 +252,12 @@ bool BufferCache::DownloadOnSideQueue(VAddr page, u64 length) {
             .commandBufferCount = 1,
             .pCommandBuffers = &side.cmdbuf,
         };
-        Vulkan::Check(side.queue.submit(submit, *side.fence));
+        {
+            // The sparse-binding queue can share this queue's handle. Vulkan requires
+            // host submissions to the same queue to be externally synchronized.
+            std::scoped_lock submit_lock{sparse_side_submit_mutex};
+            Vulkan::Check(side.queue.submit(submit, *side.fence));
+        }
         Vulkan::Check(side.device.waitForFences(*side.fence, true, UINT64_MAX));
         Vulkan::Check(side.device.resetFences(*side.fence));
         side.staging.Invalidate(0, total);
@@ -434,10 +441,10 @@ namespace {
 /// commonest) kept the GPU's bytes instead: U3's London pub reuses memory the GPU had filled
 /// with 0xff, and a free-list link the game set to 0 read back as ffffffffffffffff (its
 /// allocator faulted at 0xd9c59b), while the GPU read the same mixture and hung (device lost).
-/// The guest writes whole objects, so a change anywhere in an aligned 64-byte block (one cache
-/// line; GPU buffers are at least that aligned) makes the whole block the guest's.
+/// A change anywhere in an aligned 16-byte unit (the guest allocator's alignment) makes
+/// the whole unit inside the shadowed range the guest's.
 /// fn(begin, end, guest_owned) gets the runs of shadow.bytes, as offsets.
-constexpr u64 ShadowBlockBytes = 64;
+constexpr u64 ShadowBlockBytes = 16;
 std::atomic<u64> shadow_equal_bytes_claimed{0};
 std::atomic<u32> shadow_claim_reports{0};
 
@@ -1363,7 +1370,11 @@ void BufferCache::SubmitPendingArenaBinds(Vulkan::SubmitInfo& info) {
         // Called inside Scheduler::SubmitExecution (queue lock held), so the queue is ours.
         (void)instance.GetGraphicsQueue().waitIdle();
     }
-    auto submit_result = instance.GetSparseQueue().bindSparse(sparse_info);
+    vk::Result submit_result;
+    {
+        std::scoped_lock submit_lock{sparse_side_submit_mutex};
+        submit_result = instance.GetSparseQueue().bindSparse(sparse_info);
+    }
     if (submit_result == vk::Result::eErrorDeviceLost) {
         std::printf("Device lost during a sparse bind\n");
         Vulkan::DeviceLost(instance.GetDevice());

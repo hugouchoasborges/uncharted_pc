@@ -1,12 +1,14 @@
 # Uncharted: The Nathan Drake Collection for Windows
 
+This fork uses **upstream version + fork revision**: `0.3.6.1` is upstream `0.3.6` with fork revision `1`. Further fork updates increment the last number. When a newer upstream release is integrated, the prefix follows it and the revision starts at `1` (for example `0.3.7.1` or `0.4.0.1`). Built-in updates come from this fork.
+
 **Uncharted 1, 2 and 3 from the PS4 collection running natively on Windows 10 and 11, by [SuperMedo](https://github.com/Supermedo).** Mohammed Albarghouthi
 
 Same idea as my [Bloodborne port](https://github.com/Supermedo/bloodborne_pc): the original PS4 game
 code runs directly on your PC and the graphics are translated to Vulkan. Unpack the zip, start
 `Uncharted.exe`, pick your game folder, choose a game and press **PLAY**.
 
-**[Download the latest version](https://github.com/Supermedo/uncharted_pc/releases/latest)** · **[Join the Discord](https://discord.gg/s3RgH6cRfJ)**
+**[Download the latest version](https://github.com/soni424/uncharted_pc/releases/latest)** · **[Join the Discord](https://discord.gg/s3RgH6cRfJ)**
 
 > **No game files are included.** You need your own decrypted dump of the collection
 > (CUSA02343, CUSA02320, ...: the folder with eboot.bin, big2-ps4_Shipping.elf,
@@ -81,8 +83,11 @@ FSR 4 assets from [FireBurn/Q2RTX](https://github.com/FireBurn/Q2RTX), the
 [MSYS2](https://www.msys2.org) / [LLVM](https://llvm.org), [PyInstaller](https://pyinstaller.org),
 [Pillow](https://python-pillow.org) and the Cinzel font (SIL Open Font License).
 
-NVIDIA, GeForce RTX and DLSS are trademarks of NVIDIA Corporation. The default covers and the
-icon are original artwork; no official art is included.
+NVIDIA, GeForce RTX and DLSS are trademarks of NVIDIA Corporation. The default covers use
+photographs from Serg Alesenko, Matthew Solomon and AXP Photography under the
+[Pexels license](https://www.pexels.com/license/); their source links are included in
+`packaging/windows/licenses/Pexels-PHOTOS.txt`. The icon is original artwork; no official game art
+is included.
 
 ## License
 

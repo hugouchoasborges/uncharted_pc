@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Builds dist/uncharted-windows/ (and dist/uncharted-windows.zip): Uncharted.exe (the launcher,
+# Builds dist/uncharted-windows/ and a versioned ZIP: Uncharted.exe (the launcher,
 # frozen with PyInstaller so players need no Python), Play Uncharted.exe, bb-probe.exe with the
 # MSYS2 CLANG64 DLLs it needs, the preparation scripts and run.py. Run from an MSYS2 CLANG64
 # shell after `bash build.sh`. Freezing uses a Windows Python 3.10+ (python.org; WINPYTHON
@@ -22,11 +22,12 @@ export USERPROFILE=${USERPROFILE:-$(cygpath -w "/c/Users/$(id -un)")}
 if [[ ! -x out/pyenv/Scripts/python.exe ]]; then
     "$python" -m venv out/pyenv
 fi
-out/pyenv/Scripts/python.exe -m pip install -q --disable-pip-version-check pyinstaller pillow
+out/pyenv/Scripts/python.exe -m pip install -q --disable-pip-version-check pyinstaller pillow tkinterdnd2 cryptography
 # The scripts run inside Uncharted.exe (--script): the standard modules they import come along.
 hidden=()
-for module in argparse base64 collections hashlib json re shutil struct tempfile zlib ctypes.wintypes \
-              uncharted_art uncharted_fonts uncharted_widgets bbport_steam PIL.ImageTk; do
+for module in argparse base64 collections hashlib json re shutil struct tempfile zlib ctypes.wintypes cheats \
+              uncharted_art uncharted_fonts uncharted_i18n uncharted_widgets bbport_steam PIL.ImageTk pkg_game pkg_extract pkg_info pkg_keys \
+              cryptography.hazmat.primitives.ciphers; do
     hidden+=(--hidden-import "$module")
 done
 out/pyenv/Scripts/python.exe -m PyInstaller --noconfirm --clean --log-level WARN --windowed \
@@ -36,6 +37,7 @@ out/pyenv/Scripts/python.exe -m PyInstaller --noconfirm --clean --log-level WARN
     --add-data "$(cygpath -w "$PWD/launcher/fonts");fonts" \
     --add-data "$(cygpath -w "$PWD/launcher/covers");covers" \
     "${hidden[@]}" \
+    --collect-all tkinterdnd2 \
     "$(cygpath -w "$PWD/launcher/uncharted_launcher.py")"
 
 # The package is assembled in a fresh staging folder and zipped from there; dist/uncharted-windows
@@ -56,11 +58,20 @@ ldd "$dest/bin/bb-probe.exe" "$dest/bin/bb-gpu-capabilities.exe" |
         cp -u "$dll" "$dest/bin/"
     done
 # Only what run.py runs to prepare a game (Bloodborne's patch and mod tools stay out).
-cp scripts/prepare.py scripts/link_modules.py scripts/link_libc.py scripts/content_profile.py "$dest/scripts/"
+cp scripts/prepare.py scripts/link_modules.py scripts/link_libc.py scripts/content_profile.py scripts/cheats.py "$dest/scripts/"
+cp scripts/pkg_game.py scripts/pkg_info.py scripts/pkg_extract.py scripts/pkg_keys.py "$dest/scripts/"
 cp run.py LICENSE "$dest/"
 cp packaging/windows/README-Uncharted.txt "$dest/README.txt"
 mkdir -p "$dest/licenses"
 cp packaging/windows/licenses/*.txt "$dest/licenses/" 2>/dev/null || true
+for license in out/pyenv/Lib/site-packages/tkinterdnd2-*.dist-info/licenses/LICENSE; do
+    [[ -f $license ]] && cp "$license" "$dest/licenses/tkinterdnd2-LICENSE.txt"
+done
+for package in cryptography cffi; do
+    for license in out/pyenv/Lib/site-packages/$package-*.dist-info/licenses/*; do
+        [[ -f $license ]] && cp "$license" "$dest/licenses/$package-$(basename "$license").txt"
+    done
+done
 # FSR 4 (the v07 INT8 model) when its assets are in fsr4_shaders/ (tools/fetch_fsr4_assets.sh).
 if [[ -d fsr4_shaders ]]; then cp -r fsr4_shaders "$dest/"; fi
 # DLSS and DLSS Frame Generation (NVIDIA RTX): the MSVC-built bridge and NVIDIA's runtimes, next
@@ -81,10 +92,15 @@ for package in protobuf abseil-cpp openssl miniupnpc zlib; do
     if [[ -f $license ]]; then cp "$license" "$dest/licenses/$package-LICENSE.txt"; fi
 done
 find "$dest" -name __pycache__ -prune -exec rm -r {} +
+# Read the launcher constant without importing the GUI or maintaining another version number.
+version=$(out/pyenv/Scripts/python.exe -c \
+    'import ast, pathlib, re; tree = ast.parse(pathlib.Path("launcher/uncharted_launcher.py").read_text(encoding="utf-8")); version = next(ast.literal_eval(n.value) for n in tree.body if isinstance(n, ast.Assign) and any(isinstance(t, ast.Name) and t.id == "VERSION" for t in n.targets)); assert re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+", version), "Expected upstream major.minor.patch plus fork revision"; print(version)' | tr -d '\r')
+printf '%s\n' "$version" > "$dest/VERSION.txt"
+archive="dist/uncharted-windows-v$version.zip"
 mkdir -p dist
-rm -f dist/uncharted-windows.zip
+rm -f "$archive"
 (cd out/stage && powershell -NoProfile -Command \
-    "Compress-Archive -Path uncharted-windows -DestinationPath ../../dist/uncharted-windows.zip")
+    "Compress-Archive -Path uncharted-windows -DestinationPath ../../$archive")
 
 # Refresh dist/uncharted-windows, keeping what players create there (saves, settings), and only
 # while nothing runs from it: deleting a running launcher's files breaks it.
@@ -96,7 +112,7 @@ if [[ ${running:-0} != 0 ]]; then
 else
     mkdir -p "$play"
     find "$play" -mindepth 1 -maxdepth 1 ! -name user ! -name out ! -name art ! -name bbport.ini \
-        ! -name input.ini ! -name last_run.log -exec rm -rf {} +
+        ! -name input.ini ! -name last_run.log ! -name game -exec rm -rf {} +
     cp -r "$dest/." "$play/"
 fi
-du -sh "$dest" dist/uncharted-windows.zip
+du -sh "$dest" "$archive"

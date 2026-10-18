@@ -2,13 +2,6 @@
 # drivers, adapted to the native_probe runtime through shims in shim/.
 cmake_minimum_required(VERSION 3.24)
 project(bbgpu LANGUAGES C CXX)
-# Newer libc++ (clang 21+) no longer includes these transitively; the shadPS4, sirit and FFX
-# sources rely on them (std::abort, _countof, swprintf_s, log2, placement new, ...).
-if(WIN32)
-    foreach(header cstdlib cstring cstdio cstdint cmath cwchar new limits utility algorithm)
-        add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:SHELL:-include ${header}>")
-    endforeach()
-endif()
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
@@ -87,6 +80,10 @@ endif()
 find_package(Zydis REQUIRED)
 find_program(GLSLANG_COMPILER NAMES glslang glslangValidator REQUIRED)
 
+if (WIN32)
+    # Recent MSYS2 libc++ no longer includes common standard headers transitively.
+    add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-include${CMAKE_CURRENT_SOURCE_DIR}/compat/libcxx_transitive.hpp>)
+endif ()
 set(SIRIT_USE_SYSTEM_SPIRV_HEADERS OFF CACHE BOOL "" FORCE)
 add_subdirectory(third_party/sirit EXCLUDE_FROM_ALL)
 
@@ -94,6 +91,18 @@ add_subdirectory(third_party/sirit EXCLUDE_FROM_ALL)
 set(FFX_VK_PORTABLE_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(FFX_VK_PORTABLE_BUILD_PROBE OFF CACHE BOOL "" FORCE)
 add_subdirectory(third_party/fsr-vulkan EXCLUDE_FROM_ALL)
+if (WIN32)
+    # The FidelityFX SDK expects MSVC on Windows; recent MSYS2 headers no longer provide its
+    # MSVC-only names transitively (compat/ffx_mingw_compat.hpp).
+    get_property(ffx_targets DIRECTORY third_party/fsr-vulkan PROPERTY BUILDSYSTEM_TARGETS)
+    foreach (ffx_target IN LISTS ffx_targets)
+        get_target_property(ffx_type ${ffx_target} TYPE)
+        if (NOT ffx_type STREQUAL "INTERFACE_LIBRARY" AND NOT ffx_type STREQUAL "UTILITY")
+            target_compile_options(${ffx_target} PRIVATE
+                $<$<COMPILE_LANGUAGE:CXX>:-include${CMAKE_CURRENT_SOURCE_DIR}/compat/ffx_mingw_compat.hpp>)
+        endif ()
+    endforeach ()
+endif ()
 
 # Host shaders -> headers (same scheme as shadPS4's host_shaders/CMakeLists.txt).
 set(SHADER_SRC ${CMAKE_CURRENT_SOURCE_DIR}/shadps4/video_core/host_shaders)
@@ -255,7 +264,7 @@ if (WIN32)
     add_executable(bb-probe ../src/probe.c ${BB_RUNTIME} ../src/compat_win.c ../src/vulkan_smoke.c
         ../packaging/windows/bb-probe.rc)
     set_target_properties(bb-probe PROPERTIES C_STANDARD 11 C_EXTENSIONS OFF)
-    target_compile_options(bb-probe PRIVATE $<$<COMPILE_LANGUAGE:C>:-Wall -Wextra -Werror>)
+    target_compile_options(bb-probe PRIVATE $<$<COMPILE_LANGUAGE:C>:-Wall -Wextra -Werror -Wno-unknown-warning-option -Wno-unused-but-set-global>)
     target_include_directories(bb-probe PRIVATE .. ../src)
     target_link_libraries(bb-probe PRIVATE bbgpu atrac9 onecore bcrypt ws2_32 -pthread)
     # The PS4 range (64 GiB - 1 TiB) must stay free: no high-entropy ASLR for heaps and stacks.
@@ -270,6 +279,12 @@ if (WIN32)
 endif()
 
 # Explicit test targets; neither launches the game nor needs a Vulkan device.
+add_executable(record-chunk-test EXCLUDE_FROM_ALL ../tests/test_record_chunk.cpp
+    ../tests/test_gpu_runtime_stubs.cpp)
+target_include_directories(record-chunk-test PRIVATE shim shadps4 third_party/gcn/include)
+target_compile_options(record-chunk-test PRIVATE -UNDEBUG)
+target_link_libraries(record-chunk-test PRIVATE bbgpu)
+
 add_executable(motion-history-test EXCLUDE_FROM_ALL ../tests/test_motion_history.cpp)
 target_compile_options(motion-history-test PRIVATE -UNDEBUG -Wall -Wextra -Werror)
 target_include_directories(motion-history-test PRIVATE ..)
