@@ -16,7 +16,7 @@
 #include <x86intrin.h>
 
 namespace VideoCore {
-void PrintFaultHistory(unsigned long long address, unsigned long long size);
+void PrintFaultHistory(std::uint64_t address, std::uint64_t size);
 }
 
 namespace BbWriteLog {
