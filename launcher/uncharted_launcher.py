@@ -561,7 +561,8 @@ class Launcher:
         self.prep = None
         self.prep_output = queue.Queue()
         self.prep_then_play, self.prep_error = False, ''
-        root.title(f'{NAME} — The Nathan Drake Collection for Windows · by {AUTHOR}')
+        platform_name = 'Windows' if os.name == 'nt' else 'Linux'
+        root.title(f'{NAME} — The Nathan Drake Collection for {platform_name} · by {AUTHOR}')
         root.configure(bg=BG)
         monitor_scale = root.winfo_fpixels('1i') / 96.0
         self.area, self.frame = work_metrics()
@@ -1078,7 +1079,9 @@ class Launcher:
             self.nav[name], self.nav_pills[name], self.nav_marks[name] = item, pill, mark
         tk.Frame(side, bg=BG).pack(fill='both', expand=True)
         self.side = side
-        self.side_note = tk.Label(side, text=_('Native port: the original PS4 game code runs directly on Windows.'),
+        self.side_note = tk.Label(side, text=_('Native port: the original PS4 game code runs directly on Windows.'
+                                             if os.name == 'nt' else
+                                             'Native port: the original PS4 game code runs directly on Linux.'),
                                   bg=BG, fg=MUTED, font=('Segoe UI', 9), justify='left',
                                   wraplength=side_w - 36)
         self.side_note.pack(anchor='w', padx=18, pady=(0, 18))
