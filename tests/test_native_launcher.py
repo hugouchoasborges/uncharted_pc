@@ -13,6 +13,9 @@ spec.loader.exec_module(launcher)
 
 @unittest.skipIf(os.name == 'nt', 'Linux launcher checks')
 class NativeLauncherTests(unittest.TestCase):
+    def test_linux_preserves_portable_settings_location(self):
+        self.assertEqual(launcher.CONFIG_DIR, launcher.DATA_DIR)
+
     def test_linux_stdio_does_not_use_msvcrt(self):
         launcher.attach_stdio()
 

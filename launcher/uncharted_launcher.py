@@ -36,7 +36,7 @@ import uncharted_i18n
 import pkg_game
 
 DATA_DIR = Path(os.environ.get('BB_DATA_DIR', PORT_DIR))
-CONFIG_DIR = Path(os.environ.get('APPDATA', Path.home())) / 'uncharted-launcher'
+CONFIG_DIR = Path(os.environ.get('APPDATA', Path.home())) / 'uncharted-launcher' if os.name == 'nt' else DATA_DIR
 CONFIG_FILE = CONFIG_DIR / 'settings.json'
 NAME = 'Uncharted'
 AUTHOR = 'SuperMedo'
