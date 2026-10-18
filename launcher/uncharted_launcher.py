@@ -18,6 +18,7 @@ import queue
 import re
 import runpy
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -168,6 +169,8 @@ def _(text):
 
 def attach_stdio():
     """A windowed executable starts without sys.stdout; inherited pipes or a console still exist."""
+    if os.name != 'nt':
+        return
     import msvcrt
     for name, std in (('stdout', -11), ('stderr', -12)):
         if getattr(sys, name) is not None:
@@ -2056,7 +2059,8 @@ class Launcher:
         try:
             self.process = subprocess.Popen(run_command(), cwd=PORT_DIR, env=game_environment(self.app),
                                             stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
-                                            stderr=subprocess.STDOUT, creationflags=NO_WINDOW)
+                                            stderr=subprocess.STDOUT, creationflags=NO_WINDOW,
+                                            start_new_session=os.name != 'nt')
         except OSError as error:
             self.append(_('Could not start: {}').format(error) + '\n')
             self.process = None
@@ -2245,7 +2249,10 @@ class Launcher:
         path = Path(path or DATA_DIR)
         if not path.exists():
             path.mkdir(parents=True, exist_ok=True)
-        os.startfile(str(path))
+        if os.name == 'nt':
+            os.startfile(str(path))
+        else:
+            subprocess.Popen(['xdg-open', str(path)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
     # ---- updates -------------------------------------------------------------------------------
     def check_update(self, manual=False):
@@ -2606,6 +2613,9 @@ class GameJob:
     collection, an in-game restart), so Stop ends all of them."""
 
     def __init__(self, process):
+        self.process, self.handle = process, None
+        if os.name != 'nt':
+            return
         kernel32 = ctypes.windll.kernel32
         kernel32.CreateJobObjectW.restype = ctypes.c_void_p
         self.handle = kernel32.CreateJobObjectW(None, None)
@@ -2613,6 +2623,12 @@ class GameJob:
             kernel32.AssignProcessToJobObject(ctypes.c_void_p(self.handle), ctypes.c_void_p(int(process._handle)))
 
     def terminate(self):
+        if os.name != 'nt':
+            try:
+                os.killpg(self.process.pid, signal.SIGTERM)
+            except ProcessLookupError:
+                pass
+            return
         if self.handle:
             ctypes.windll.kernel32.TerminateJobObject(ctypes.c_void_p(self.handle), 1)
 
