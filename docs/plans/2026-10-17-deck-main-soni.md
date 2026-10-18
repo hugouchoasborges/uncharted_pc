@@ -2,7 +2,7 @@
 
 Goal: install a native Linux build combining upstream main, Hugo PRs 94/100 and soni424 main.
 
-Architecture: retain the merged renderer/runtime and launcher features; apply PR72 Linux build support and a Linux runner path in the launcher. Build in an isolated WSL checkout with GCC14 and existing static dependencies. Deploy a versioned package with rollback while retaining user data and settings.
+Architecture: retain the merged renderer/runtime and launcher features; apply PR72 Linux build support and make the Python runner work natively on Linux. Build in an isolated WSL checkout with GCC14 and existing static dependencies. Deploy a versioned package with rollback while retaining user data and settings.
 
 1. Merge upstream b787c10, both PR heads, soni424 e19e2c3; resolve duplicated cherry-picks using the soni implementations.
 2. Apply Linux PR72; retain all soni features and add Linux launcher execution support.

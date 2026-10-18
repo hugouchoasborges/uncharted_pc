@@ -204,8 +204,6 @@ def run_role(argv):
 
 
 def run_command():
-    if os.name != 'nt':
-        return ['bash', str(PORT_DIR / 'run.sh')]
     return [sys.executable, '--run'] if FROZEN else [sys.executable, str(PORT_DIR / 'run.py')]
 
 
